@@ -1,10 +1,13 @@
 ﻿using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using TextEditorLab.Models;
+using TextEditorLab.Services;
 
 namespace TextEditorLab
 {
@@ -13,6 +16,8 @@ namespace TextEditorLab
         private string? _currentFilePath = null;
         private bool _isModified = false;
         private bool _suppressModifiedFlag = false;
+
+        private readonly LexicalAnalyzer _lexicalAnalyzer = new LexicalAnalyzer();
 
         public MainWindow()
         {
@@ -42,7 +47,6 @@ namespace TextEditorLab
             FileSizeText.Text = $"Размер: {byteCount} байт";
         }
 
-
         private void NewFile_Click(object sender, RoutedEventArgs e)
         {
             if (!ConfirmSaveBeforeAction()) return;
@@ -50,6 +54,8 @@ namespace TextEditorLab
             _suppressModifiedFlag = true;
             EditorTextBox.Clear();
             _suppressModifiedFlag = false;
+
+            ResultsDataGrid.ItemsSource = null;
 
             _currentFilePath = null;
             _isModified = false;
@@ -78,6 +84,8 @@ namespace TextEditorLab
                     EditorTextBox.Text = content;
                     _suppressModifiedFlag = false;
 
+                    ResultsDataGrid.ItemsSource = null;
+
                     _currentFilePath = openDialog.FileName;
                     _isModified = false;
 
@@ -87,8 +95,11 @@ namespace TextEditorLab
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка при открытии файла:\n{ex.Message}",
-                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(
+                        $"Ошибка при открытии файла:\n{ex.Message}",
+                        "Ошибка",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
                 }
             }
         }
@@ -135,8 +146,11 @@ namespace TextEditorLab
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при сохранении файла:\n{ex.Message}",
-                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    $"Ошибка при сохранении файла:\n{ex.Message}",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -173,7 +187,6 @@ namespace TextEditorLab
             return false;
         }
 
-
         private void Undo_Click(object sender, RoutedEventArgs e) => EditorTextBox.Undo();
         private void Redo_Click(object sender, RoutedEventArgs e) => EditorTextBox.Redo();
         private void Cut_Click(object sender, RoutedEventArgs e) => EditorTextBox.Cut();
@@ -189,7 +202,6 @@ namespace TextEditorLab
         {
             EditorTextBox.SelectAll();
         }
-
 
         private void ShowTextInfo_Click(object sender, RoutedEventArgs e)
         {
@@ -217,40 +229,60 @@ namespace TextEditorLab
             infoWindow.ShowDialog();
         }
 
-
         private void RunAnalyzer_Click(object sender, RoutedEventArgs e)
         {
-            OutputTextBox.Clear();
+            ResultsDataGrid.ItemsSource = null;
+
             string text = EditorTextBox.Text ?? string.Empty;
 
-            int lines = text.Length == 0 ? 0 : text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).Length;
-            int words = text.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            List<Token> tokens = _lexicalAnalyzer.Analyze(text);
 
-            OutputTextBox.AppendText("🚀 ЗАПУСК СИНТАКСИЧЕСКОГО АНАЛИЗАТОРА\n");
-            OutputTextBox.AppendText("========================================\n");
-            OutputTextBox.AppendText($"📄 Длина текста: {text.Length} символов\n");
-            OutputTextBox.AppendText($"📊 Количество строк: {lines}\n");
-            OutputTextBox.AppendText($"🔤 Количество слов: {words}\n");
-            OutputTextBox.AppendText("✅ Анализ завершён успешно!\n");
-            OutputTextBox.AppendText("========================================\n");
+            ResultsDataGrid.ItemsSource = null;
+            ResultsDataGrid.ItemsSource = tokens;
 
-            StatusText.Text = "Анализ выполнен";
+            int errorCount = 0;
+            foreach (var token in tokens)
+            {
+                if (token.IsError)
+                    errorCount++;
+            }
+
+            StatusText.Text = errorCount == 0
+                ? "Лексический анализ выполнен"
+                : $"Лексический анализ завершён, ошибок: {errorCount}";
         }
 
+        private void ResultsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ResultsDataGrid.SelectedItem is not Token token)
+                return;
+
+            if (!token.IsError)
+                return;
+
+            EditorTextBox.Focus();
+            EditorTextBox.Select(token.StartIndex, token.Length > 0 ? token.Length : 1);
+
+            int lineIndex = EditorTextBox.GetLineIndexFromCharacterIndex(token.StartIndex);
+            EditorTextBox.ScrollToLine(lineIndex);
+
+            StatusText.Text = $"Переход к ошибке: строка {token.Line}, позиция {token.StartColumn}";
+            UpdateStatusBar();
+        }
 
         private void Help_Click(object sender, RoutedEventArgs e)
         {
             string helpText =
-                "📚 СПРАВКА — Текстовый редактор\n" +
+                "СПРАВКА — Текстовый редактор\n" +
                 "═══════════════════════════════\n\n" +
                 "РЕАЛИЗОВАННЫЕ ФУНКЦИИ:\n\n" +
-                "📁 Файл:\n" +
+                "Файл:\n" +
                 "  • Создать (Ctrl+N) — новый документ\n" +
                 "  • Открыть (Ctrl+O) — загрузить файл\n" +
                 "  • Сохранить (Ctrl+S) — сохранить изменения\n" +
                 "  • Сохранить как — сохранить в новый файл\n" +
                 "  • Выход — закрыть программу\n\n" +
-                "✏️ Правка:\n" +
+                "Правка:\n" +
                 "  • Отменить (Ctrl+Z) — отмена действия\n" +
                 "  • Повторить (Ctrl+Y) — повтор действия\n" +
                 "  • Вырезать (Ctrl+X) — вырезать текст\n" +
@@ -258,13 +290,13 @@ namespace TextEditorLab
                 "  • Вставить (Ctrl+V) — вставить текст\n" +
                 "  • Удалить (Del) — удалить выделенное\n" +
                 "  • Выделить всё (Ctrl+A) — весь текст\n\n" +
-                "🎯 Пуск:\n" +
-                "  • Запуск анализатора — анализ текста\n\n" +
-                "❓ Справка:\n" +
+                "Пуск:\n" +
+                "  • Запуск лексического анализатора\n\n" +
+                "Справка:\n" +
                 "  • Вызов справки (F1) — это окно\n" +
                 "  • О программе — информация о разработчике\n\n" +
-                "🖱️ Панель инструментов дублирует основные функции меню.\n" +
-                "📏 Размер областей можно менять перетаскиванием разделителя.";
+                "Панель инструментов дублирует основные функции меню.\n" +
+                "Размер областей можно менять перетаскиванием разделителя.";
 
             MessageBox.Show(helpText, "Справка", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -272,17 +304,17 @@ namespace TextEditorLab
         private void About_Click(object sender, RoutedEventArgs e)
         {
             string aboutText =
-                "ℹ️ О ПРОГРАММЕ\n" +
+                " О ПРОГРАММЕ\n" +
                 "══════════════\n\n" +
-                "Текстовый редактор\n" +
-                "Лабораторная работа №1\n\n" +
+                "Текстовый редактор с лексическим анализатором\n" +
+                "Лабораторная работа №2\n\n" +
                 "Разработчик: Геронимус Матвей Анатольевич\n" +
                 "Группа: АП-326\n\n" +
                 "Язык: C#\n" +
                 "GUI: WPF\n" +
                 "Платформа: .NET 9\n" +
                 "Год: 2026\n\n" +
-                "© Учебный проект";
+                "Учебный проект";
 
             MessageBox.Show(aboutText, "О программе", MessageBoxButton.OK, MessageBoxImage.Information);
         }

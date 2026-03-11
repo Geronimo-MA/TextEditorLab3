@@ -222,17 +222,25 @@
                       ShowsPreview="True"
                       ResizeDirection="Rows" />
 
-        <TextBox x:Name="OutputTextBox"
-                 Grid.Row="4"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 FontFamily="Consolas"
-                 FontSize="12"
-                 Background="#F5F5F5"
-                 BorderBrush="Gray"
-                 BorderThickness="1"
-                 Padding="5" />
+        <DataGrid x:Name="ResultsDataGrid"
+          Grid.Row="4"
+          AutoGenerateColumns="False"
+          IsReadOnly="True"
+          SelectionMode="Single"
+          SelectionChanged="ResultsDataGrid_SelectionChanged"
+          FontFamily="Consolas"
+          FontSize="12"
+          Background="#F5F5F5"
+          BorderBrush="Gray"
+          BorderThickness="1"
+          HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Код" Binding="{Binding Code}" Width="80"/>
+                <DataGridTextColumn Header="Тип лексемы" Binding="{Binding TypeName}" Width="220"/>
+                <DataGridTextColumn Header="Лексема" Binding="{Binding Lexeme}" Width="200"/>
+                <DataGridTextColumn Header="Местоположение" Binding="{Binding Location}" Width="180"/>
+            </DataGrid.Columns>
+        </DataGrid>
 
         <StatusBar Grid.Row="5" Background="LightGray" Height="25">
             <StatusBarItem>
