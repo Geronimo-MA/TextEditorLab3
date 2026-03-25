@@ -8,7 +8,7 @@
         Operator,
         TernaryQuestion,
         TernaryColon,
-        Separator,
+        Semicolon,
         Error
     }
 }

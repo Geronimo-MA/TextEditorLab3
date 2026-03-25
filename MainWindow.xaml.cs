@@ -18,6 +18,7 @@ namespace TextEditorLab
         private bool _suppressModifiedFlag = false;
 
         private readonly LexicalAnalyzer _lexicalAnalyzer = new LexicalAnalyzer();
+        private readonly SyntaxAnalyzer _syntaxAnalyzer = new SyntaxAnalyzer();
 
         public MainWindow()
         {
@@ -25,6 +26,86 @@ namespace TextEditorLab
             UpdateTitle();
             UpdateStatusBar();
             StatusText.Text = "Готов";
+        }
+        private List<SyntaxError> ConvertLexicalErrorsToDisplay(List<Token> tokens)
+        {
+            var errors = new List<SyntaxError>();
+
+            foreach (var token in tokens)
+            {
+                if (!token.IsError)
+                    continue;
+
+                errors.Add(new SyntaxError
+                {
+                    InvalidFragment = token.Lexeme,
+                    Line = token.Line,
+                    StartColumn = token.StartColumn,
+                    EndColumn = token.EndColumn,
+                    StartIndex = token.StartIndex,
+                    Length = token.Length > 0 ? token.Length : 1,
+                    Description = token.TypeName
+                });
+            }
+
+            return errors;
+        }
+        private List<SyntaxError> AnalyzeAllLines(string text)
+        {
+            var allErrors = new List<SyntaxError>();
+
+            string normalizedText = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            string[] lines = normalizedText.Split('\n');
+
+            int globalStartIndex = 0;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string lineText = lines[i];
+                int lineNumber = i + 1;
+
+                if (string.IsNullOrWhiteSpace(lineText))
+                {
+                    globalStartIndex += lineText.Length + 1;
+                    continue;
+                }
+
+                List<Token> tokens = _lexicalAnalyzer.Analyze(lineText);
+
+                foreach (var token in tokens)
+                {
+                    token.Line = lineNumber;
+                    token.StartIndex += globalStartIndex;
+                }
+
+                var lexicalErrors = ConvertLexicalErrorsToDisplay(tokens);
+                if (lexicalErrors.Count > 0)
+                {
+                    foreach (var error in lexicalErrors)
+                    {
+                        error.Line = lineNumber;
+                        error.StartIndex += globalStartIndex;
+                    }
+
+                    allErrors.AddRange(lexicalErrors);
+                    globalStartIndex += lineText.Length + 1;
+                    continue;
+                }
+
+                var syntaxResult = _syntaxAnalyzer.Analyze(tokens);
+
+                foreach (var error in syntaxResult.Errors)
+                {
+                    error.Line = lineNumber;
+                    error.StartIndex += globalStartIndex;
+                }
+
+                allErrors.AddRange(syntaxResult.Errors);
+
+                globalStartIndex += lineText.Length + 1;
+            }
+
+            return allErrors;
         }
 
         private void UpdateTitle()
@@ -235,38 +316,52 @@ namespace TextEditorLab
 
             string text = EditorTextBox.Text ?? string.Empty;
 
-            List<Token> tokens = _lexicalAnalyzer.Analyze(text);
-
-            ResultsDataGrid.ItemsSource = null;
-            ResultsDataGrid.ItemsSource = tokens;
-
-            int errorCount = 0;
-            foreach (var token in tokens)
+            if (string.IsNullOrWhiteSpace(text))
             {
-                if (token.IsError)
-                    errorCount++;
+                var emptyErrors = new List<SyntaxError>
+        {
+            new SyntaxError
+            {
+                InvalidFragment = "<пустая строка>",
+                Line = 1,
+                StartColumn = 1,
+                EndColumn = 1,
+                StartIndex = 0,
+                Length = 1,
+                Description = "Пустая строка. Ожидалась конструкция тернарного оператора."
+            }
+        };
+
+                ResultsDataGrid.ItemsSource = emptyErrors;
+                StatusText.Text = "Анализ завершён, ошибок: 1";
+                return;
             }
 
-            StatusText.Text = errorCount == 0
-                ? "Лексический анализ выполнен"
-                : $"Лексический анализ завершён, ошибок: {errorCount}";
+            var errors = AnalyzeAllLines(text);
+
+            ResultsDataGrid.ItemsSource = errors;
+
+            StatusText.Text = errors.Count == 0
+                ? "Анализ выполнен: ошибок нет"
+                : $"Анализ завершён, ошибок: {errors.Count}";
         }
 
         private void ResultsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (ResultsDataGrid.SelectedItem is not Token token)
+            if (ResultsDataGrid.SelectedItem is not SyntaxError error)
                 return;
 
-            if (!token.IsError)
+            if (error.StartIndex < 0 || error.StartIndex > EditorTextBox.Text.Length)
                 return;
 
             EditorTextBox.Focus();
-            EditorTextBox.Select(token.StartIndex, token.Length > 0 ? token.Length : 1);
+            EditorTextBox.CaretIndex = error.StartIndex;
+            EditorTextBox.Select(error.StartIndex, error.Length > 0 ? error.Length : 1);
 
-            int lineIndex = EditorTextBox.GetLineIndexFromCharacterIndex(token.StartIndex);
+            int lineIndex = EditorTextBox.GetLineIndexFromCharacterIndex(error.StartIndex);
             EditorTextBox.ScrollToLine(lineIndex);
 
-            StatusText.Text = $"Переход к ошибке: строка {token.Line}, позиция {token.StartColumn}";
+            StatusText.Text = $"Переход к ошибке: строка {error.Line}, позиция {error.StartColumn}";
             UpdateStatusBar();
         }
 

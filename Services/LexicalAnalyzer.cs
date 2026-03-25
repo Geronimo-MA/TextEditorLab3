@@ -44,7 +44,7 @@ namespace TextEditorLab.Services
 
                     tokens.Add(new Token
                     {
-                        Code = 11,
+                        Code = 3,
                         TokenType = TokenType.Whitespace,
                         TypeName = "разделитель (пробел)",
                         Lexeme = MakeWhitespaceVisible(lexeme),
@@ -122,7 +122,7 @@ namespace TextEditorLab.Services
                 {
                     tokens.Add(new Token
                     {
-                        Code = 20,
+                        Code = 5,
                         TokenType = TokenType.TernaryQuestion,
                         TypeName = "знак тернарного оператора",
                         Lexeme = "?",
@@ -144,7 +144,7 @@ namespace TextEditorLab.Services
                 {
                     tokens.Add(new Token
                     {
-                        Code = 21,
+                        Code = 6,
                         TokenType = TokenType.TernaryColon,
                         TypeName = "знак тернарного оператора",
                         Lexeme = ":",
@@ -161,15 +161,15 @@ namespace TextEditorLab.Services
                     continue;
                 }
 
-                // 6. Разделители
-                if (";(),{}".Contains(c))
+                // 6. ;
+                if (c == ';')
                 {
                     tokens.Add(new Token
                     {
-                        Code = 16,
-                        TokenType = TokenType.Separator,
-                        TypeName = c == ';' ? "конец оператора" : "разделитель",
-                        Lexeme = c.ToString(),
+                        Code = 7,
+                        TokenType = TokenType.Semicolon,
+                        TypeName = "конец оператора",
+                        Lexeme = ";",
                         Line = startLine,
                         StartColumn = startCol,
                         EndColumn = startCol,
@@ -184,44 +184,74 @@ namespace TextEditorLab.Services
                 }
 
                 // 7. Операторы
-                if ("=+-*/<>!".Contains(c))
+                if ("=<>!".Contains(c))
                 {
+                    string lexeme;
+
+                    if (i + 1 < text.Length)
+                    {
+                        string twoChar = text.Substring(i, 2);
+
+                        if (twoChar == ">=" || twoChar == "<=" || twoChar == "==" || twoChar == "!=")
+                        {
+                            lexeme = twoChar;
+                            i += 2;
+                            col += 2;
+                        }
+                        else
+                        {
+                            lexeme = c.ToString();
+                            i++;
+                            col++;
+                        }
+                    }
+                    else
+                    {
+                        lexeme = c.ToString();
+                        i++;
+                        col++;
+                    }
+
                     tokens.Add(new Token
                     {
-                        Code = 10,
+                        Code = 4,
                         TokenType = TokenType.Operator,
-                        TypeName = c == '=' ? "оператор присваивания" : "оператор",
-                        Lexeme = c.ToString(),
+                        TypeName = lexeme == "=" ? "оператор присваивания" : "оператор",
+                        Lexeme = lexeme,
                         Line = startLine,
                         StartColumn = startCol,
-                        EndColumn = startCol,
+                        EndColumn = col - 1,
                         StartIndex = startIndex,
-                        Length = 1,
+                        Length = i - startIndex,
                         IsError = false
                     });
 
-                    i++;
-                    col++;
                     continue;
                 }
 
                 // 8. Ошибка
+                string errorLexeme = "";
+
+                while (i < text.Length && !IsValidChar(text[i]))
+                {
+                    errorLexeme += text[i];
+                    i++;
+                    col++;
+                }
+
                 tokens.Add(new Token
                 {
                     Code = -1,
                     TokenType = TokenType.Error,
                     TypeName = "ошибка: недопустимый символ",
-                    Lexeme = c.ToString(),
+                    Lexeme = errorLexeme,
                     Line = startLine,
                     StartColumn = startCol,
-                    EndColumn = startCol,
+                    EndColumn = col - 1,
                     StartIndex = startIndex,
-                    Length = 1,
+                    Length = i - startIndex,
                     IsError = true
                 });
-
-                i++;
-                col++;
             }
 
             return tokens;
@@ -230,6 +260,17 @@ namespace TextEditorLab.Services
         private bool IsWhitespace(char c)
         {
             return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+        }
+
+        private bool IsValidChar(char c)
+        {
+            return char.IsLetterOrDigit(c)
+                || c == '_'
+                || IsWhitespace(c)
+                || c == '?'
+                || c == ':'
+                || c == ';'
+                || "=<>!".Contains(c);
         }
 
         private string MakeWhitespaceVisible(string text)

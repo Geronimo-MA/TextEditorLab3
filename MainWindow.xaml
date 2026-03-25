@@ -235,10 +235,9 @@
           BorderThickness="1"
           HeadersVisibility="Column">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Код" Binding="{Binding Code}" Width="80"/>
-                <DataGridTextColumn Header="Тип лексемы" Binding="{Binding TypeName}" Width="220"/>
-                <DataGridTextColumn Header="Лексема" Binding="{Binding Lexeme}" Width="200"/>
+                <DataGridTextColumn Header="Неверный фрагмент" Binding="{Binding InvalidFragment}" Width="220"/>
                 <DataGridTextColumn Header="Местоположение" Binding="{Binding Location}" Width="180"/>
+                <DataGridTextColumn Header="Описание ошибки" Binding="{Binding Description}" Width="*"/>
             </DataGrid.Columns>
         </DataGrid>
 
