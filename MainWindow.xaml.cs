@@ -399,7 +399,7 @@ namespace TextEditorLab
         private void About_Click(object sender, RoutedEventArgs e)
         {
             string aboutText =
-                " О ПРОГРАММЕ\n" +
+                "О ПРОГРАММЕ\n" +
                 "══════════════\n\n" +
                 "Текстовый редактор с лексическим анализатором\n" +
                 "Лабораторная работа №2\n\n" +
