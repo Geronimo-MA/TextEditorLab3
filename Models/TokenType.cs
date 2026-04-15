@@ -9,6 +9,8 @@
         TernaryQuestion,
         TernaryColon,
         Semicolon,
+        LeftParen,
+        RightParen,
         Error
     }
 }

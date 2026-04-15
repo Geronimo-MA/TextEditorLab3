@@ -59,7 +59,7 @@ namespace TextEditorLab.Services
                     continue;
                 }
 
-                // 2. Идентификатор
+                // 2. Идентификатор или логический оператор-слово
                 if (char.IsLetter(c) || c == '_')
                 {
                     string lexeme = "";
@@ -71,19 +71,38 @@ namespace TextEditorLab.Services
                         col++;
                     }
 
-                    tokens.Add(new Token
+                    if (lexeme == "and" || lexeme == "or" || lexeme == "not")
                     {
-                        Code = 2,
-                        TokenType = TokenType.Identifier,
-                        TypeName = "идентификатор",
-                        Lexeme = lexeme,
-                        Line = startLine,
-                        StartColumn = startCol,
-                        EndColumn = col - 1,
-                        StartIndex = startIndex,
-                        Length = i - startIndex,
-                        IsError = false
-                    });
+                        tokens.Add(new Token
+                        {
+                            Code = 4,
+                            TokenType = TokenType.Operator,
+                            TypeName = "логический оператор",
+                            Lexeme = lexeme,
+                            Line = startLine,
+                            StartColumn = startCol,
+                            EndColumn = col - 1,
+                            StartIndex = startIndex,
+                            Length = i - startIndex,
+                            IsError = false
+                        });
+                    }
+                    else
+                    {
+                        tokens.Add(new Token
+                        {
+                            Code = 2,
+                            TokenType = TokenType.Identifier,
+                            TypeName = "идентификатор",
+                            Lexeme = lexeme,
+                            Line = startLine,
+                            StartColumn = startCol,
+                            EndColumn = col - 1,
+                            StartIndex = startIndex,
+                            Length = i - startIndex,
+                            IsError = false
+                        });
+                    }
 
                     continue;
                 }
@@ -183,8 +202,52 @@ namespace TextEditorLab.Services
                     continue;
                 }
 
-                // 7. Операторы
-                if ("=<>!".Contains(c))
+                // 7. (
+                if (c == '(')
+                {
+                    tokens.Add(new Token
+                    {
+                        Code = 8,
+                        TokenType = TokenType.LeftParen,
+                        TypeName = "открывающая скобка",
+                        Lexeme = "(",
+                        Line = startLine,
+                        StartColumn = startCol,
+                        EndColumn = startCol,
+                        StartIndex = startIndex,
+                        Length = 1,
+                        IsError = false
+                    });
+
+                    i++;
+                    col++;
+                    continue;
+                }
+
+                // 8. )
+                if (c == ')')
+                {
+                    tokens.Add(new Token
+                    {
+                        Code = 9,
+                        TokenType = TokenType.RightParen,
+                        TypeName = "закрывающая скобка",
+                        Lexeme = ")",
+                        Line = startLine,
+                        StartColumn = startCol,
+                        EndColumn = startCol,
+                        StartIndex = startIndex,
+                        Length = 1,
+                        IsError = false
+                    });
+
+                    i++;
+                    col++;
+                    continue;
+                }
+
+                // 9. Операторы
+                if ("=<>!&|".Contains(c))
                 {
                     string lexeme;
 
@@ -192,7 +255,8 @@ namespace TextEditorLab.Services
                     {
                         string twoChar = text.Substring(i, 2);
 
-                        if (twoChar == ">=" || twoChar == "<=" || twoChar == "==" || twoChar == "!=")
+                        if (twoChar == ">=" || twoChar == "<=" || twoChar == "==" ||
+                            twoChar == "!=" || twoChar == "&&" || twoChar == "||")
                         {
                             lexeme = twoChar;
                             i += 2;
@@ -216,7 +280,7 @@ namespace TextEditorLab.Services
                     {
                         Code = 4,
                         TokenType = TokenType.Operator,
-                        TypeName = lexeme == "=" ? "оператор присваивания" : "оператор",
+                        TypeName = GetOperatorTypeName(lexeme),
                         Lexeme = lexeme,
                         Line = startLine,
                         StartColumn = startCol,
@@ -229,7 +293,7 @@ namespace TextEditorLab.Services
                     continue;
                 }
 
-                // 8. Ошибка
+                // 10. Ошибка
                 string errorLexeme = "";
 
                 while (i < text.Length && !IsValidChar(text[i]))
@@ -270,7 +334,20 @@ namespace TextEditorLab.Services
                 || c == '?'
                 || c == ':'
                 || c == ';'
-                || "=<>!".Contains(c);
+                || c == '('
+                || c == ')'
+                || "=<>!&|".Contains(c);
+        }
+
+        private string GetOperatorTypeName(string lexeme)
+        {
+            return lexeme switch
+            {
+                "=" => "оператор присваивания",
+                ">" or "<" or ">=" or "<=" or "==" or "!=" => "оператор отношения",
+                "and" or "or" or "not" or "&&" or "||" or "!" => "логический оператор",
+                _ => "оператор"
+            };
         }
 
         private string MakeWhitespaceVisible(string text)

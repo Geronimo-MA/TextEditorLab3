@@ -60,7 +60,7 @@ namespace TextEditorLab.Services
 
         private bool ParseTernaryExpression()
         {
-            bool conditionOk = ParseCondition();
+            bool conditionOk = ParseLogicalExpression();
 
             if (!conditionOk)
             {
@@ -75,14 +75,12 @@ namespace TextEditorLab.Services
 
             if (!TryExpectCode(5, "Ожидался знак '?'."))
             {
-                RecoverToAny(":", ";");
                 return false;
             }
 
             TryParseWhitespace("Ожидался пробел после '?'.");
 
-            bool leftBranchOk = TryParseOperand("Ожидался операнд после '?'.");
-            if (!leftBranchOk)
+            if (!TryParseOperand("Ожидался операнд после '?'."))
             {
                 RecoverToAny(":", ";");
                 if (!CurrentCodeIs(6))
@@ -106,15 +104,114 @@ namespace TextEditorLab.Services
             TryParseWhitespace("Ожидался пробел после ':'.");
 
             if (!TryParseOperand("Ожидался операнд после ':'."))
-            {
                 return false;
+
+            return true;
+        }
+
+        private bool ParseLogicalExpression()
+        {
+            return ParseLogicalOr();
+        }
+
+        private bool ParseLogicalOr()
+        {
+            if (!ParseLogicalAnd())
+                return false;
+
+            while (true)
+            {
+                int savedPosition = _position;
+
+                if (!TryParseWhitespaceNoError())
+                    break;
+
+                if (TryMatchLogicalOperator("or") || TryMatchLogicalOperator("||"))
+                {
+                    TryParseWhitespace("Ожидался пробел после логического оператора 'or'.");
+
+                    if (!ParseLogicalAnd())
+                    {
+                        AddErrorFromCurrent("Ожидалось логическое выражение после оператора 'or'.");
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                _position = savedPosition;
+                break;
             }
 
             return true;
         }
 
-        private bool ParseCondition()
+        private bool ParseLogicalAnd()
         {
+            if (!ParseLogicalNot())
+                return false;
+
+            while (true)
+            {
+                int savedPosition = _position;
+
+                if (!TryParseWhitespaceNoError())
+                    break;
+
+                if (TryMatchLogicalOperator("and") || TryMatchLogicalOperator("&&"))
+                {
+                    TryParseWhitespace("Ожидался пробел после логического оператора 'and'.");
+
+                    if (!ParseLogicalNot())
+                    {
+                        AddErrorFromCurrent("Ожидалось логическое выражение после оператора 'and'.");
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                _position = savedPosition;
+                break;
+            }
+
+            return true;
+        }
+
+        private bool ParseLogicalNot()
+        {
+            if (TryMatchLogicalOperator("not"))
+            {
+                TryParseWhitespace("Ожидался пробел после логического оператора 'not'.");
+                return ParseLogicalNot();
+            }
+
+            if (TryMatchLogicalOperator("!"))
+            {
+                return ParseLogicalNot();
+            }
+
+            return ParseRelation();
+        }
+
+        private bool ParseRelation()
+        {
+            if (CurrentCodeIs(8)) // (
+            {
+                _position++;
+
+                if (!ParseLogicalExpression())
+                {
+                    AddErrorFromCurrent("Ожидалось логическое выражение после '('.");
+                    return false;
+                }
+
+                if (!TryExpectCode(9, "Ожидалась ')' ."))
+                    return false;
+
+                return true;
+            }
+
             if (!TryParseOperand("Ожидался левый операнд условия."))
                 return false;
 
@@ -131,19 +228,16 @@ namespace TextEditorLab.Services
             return true;
         }
 
-        private bool TryParseWhitespace(string errorMessage)
-        {
-            if (MatchCode(3))
-                return true;
-
-            AddErrorFromCurrent(errorMessage);
-            return false;
-        }
-
         private bool TryParseOperand(string errorMessage)
         {
             if (MatchCode(2) || MatchCode(1))
                 return true;
+
+            if (CurrentCodeIs(7))
+            {
+                AddErrorFromCurrent("Неожиданный символ ';' внутри выражения.");
+                return false;
+            }
 
             AddErrorFromCurrent(errorMessage);
             return false;
@@ -198,6 +292,53 @@ namespace TextEditorLab.Services
 
             AddErrorFromCurrent(errorMessage);
             return false;
+        }
+
+        private bool TryParseWhitespace(string errorMessage)
+        {
+            if (MatchCode(3))
+                return true;
+
+            AddErrorFromCurrent(errorMessage);
+            return false;
+        }
+
+        private bool TryParseWhitespaceNoError()
+        {
+            return MatchCode(3);
+        }
+
+        private bool TryMatchLogicalOperator(string lexeme)
+        {
+            if (Current() is Token token &&
+                token.Code == 4 &&
+                token.Lexeme == lexeme)
+            {
+                _position++;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void CheckSemicolonAtEnd()
+        {
+            if (_tokens.Count == 0)
+            {
+                AddErrorAtEnd("Ожидалась ';' в конце выражения.");
+                return;
+            }
+
+            if (_tokens[^1].Code != 7)
+            {
+                AddErrorAtEnd("Ожидалась ';' в конце выражения.");
+                return;
+            }
+
+            if (CurrentCodeIs(7))
+            {
+                _position++;
+            }
         }
 
         private void ReportTrailingTokens()
